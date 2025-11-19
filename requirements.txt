@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-telegram-bot
+email-validator
+sqlalchemy
+pydantic
+weasyprint
+jinja2
+
+pytest

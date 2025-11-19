@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ data.personal.full_name }} - Resume</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            line-height: 1.5;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1, h2 {
+            color: #333;
+            border-bottom: 2px solid #ccc;
+            padding-bottom: 5px;
+            margin-top: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            border-bottom: none;
+            margin: 0;
+            font-size: 2em;
+        }
+        .contact-info {
+            text-align: center;
+            font-size: 0.9em;
+            color: #555;
+            margin-top: 5px;
+        }
+        .section-item {
+            margin-bottom: 15px;
+        }
+        .job-title {
+            font-weight: bold;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        .company {
+            font-style: italic;
+        }
+        .date {
+            float: right;
+            font-size: 0.9em;
+        }
+        ul {
+            list-style-type: disc;
+            margin-left: 20px;
+            padding-left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{ data.personal.full_name }}</h1>
+        <div class="contact-info">
+            {{ data.personal.email }} | {{ data.personal.phone }} |
+            {{ data.personal.telegram_username }}
+        </div>
+    </div>
+
+    {% if data.personal.summary %}
+    <h2>Про себе</h2>
+    <p>{{ data.personal.summary }}</p>
+    {% endif %}
+
+    {% if data.experience %}
+    <h2>Досвід роботи</h2>
+    {% for job in data.experience %}
+    <div class="section-item">
+        <span class="job-title">{{ job.job_title }}</span> | <span class="company">{{ job.company }}</span>
+        <span class="date">{{ job.start_date.strftime('%Y.%m') }} – {% if job.end_date %}{{ job.end_date.strftime('%Y.%m') }}{% else %}Наш час{% endif %}</span>
+        <ul>
+            {% for desc in job.description %}
+            <li>{{ desc }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if data.education %}
+    <h2>Освіта</h2>
+    {% for edu in data.education %}
+    <div class="section-item">
+        <span class="job-title">{{ edu.degree }}</span> | <span class="company">{{ edu.institution }}, {{ edu.city }}</span>
+        <span class="date">{{ edu.year_finished }}</span>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+</body>
+</html>
