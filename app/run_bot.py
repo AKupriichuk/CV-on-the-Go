@@ -39,7 +39,6 @@ def main():
     print("Запуск Telegram-бота у Pooling Mode...")
     application.run_polling(poll_interval=3.0, drop_pending_updates=True)
 
-
 if __name__ == '__main__':
     # Ми запускаємо бота напряму (без Flask/Gunicorn)
     main()
