@@ -1,3 +1,5 @@
+# app/main.py
+
 import os
 import uvicorn
 from fastapi import FastAPI
@@ -6,15 +8,22 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from app.core.database import init_db
 from app.bot.handlers import start_command, generate_command, message_handler
 
-# Завантажуємо змінні середовища з .env
+# Встановлюємо asyncio для запуску бота в фоновому режимі
+import asyncio
+from typing import Dict
+
+# Завантажуємо змінні середовища
 load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # 1. Ініціалізація застосунку FastAPI
 app = FastAPI(title="CV on the Go Monolith")
 
+# Словник для зберігання об'єкта бота, щоб мати до нього доступ
+app.state.tg_bot_app: Application = None
 
-def init_telegram_bot():
+
+def init_telegram_bot() -> Application:
     """Створює та налаштовує Application для Telegram-бота."""
     if not TELEGRAM_BOT_TOKEN:
         print("Помилка: Токен Telegram-бота не знайдено.")
@@ -25,28 +34,46 @@ def init_telegram_bot():
     # Додавання обробників команд
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("generate", generate_command))
-    # application.add_handler(CommandHandler("add_experience", add_experience_command)) # TODO: Додати обробники для досвіду/освіти
 
     # Додавання головного обробника текстових повідомлень
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
 
-    # Запускаємо бота в окремому потоці (для роботи в межах FastAPI)
-    # Це спрощений спосіб для розробки.
-    print("Запуск Telegram-бота...")
-    application.run_polling(poll_interval=3.0)
-    print("Telegram-бот ініціалізовано.")
+    return application
 
 
-# 2. Подія запуску: Створюємо таблиці в БД та запускаємо бота
+# 2. ПОДІЇ ЖИТТЄВОГО ЦИКЛУ (Lifespan Events)
+
 @app.on_event("startup")
-def on_startup():
-    """Створює всі таблиці SQLite та запускає бота при старті застосунку."""
+async def on_startup():
+    """Створює таблиці БД та запускає бота як фонове завдання."""
     print("Ініціалізація бази даних...")
     init_db()
     print("База даних ініціалізована.")
 
-    # Запускаємо бота
-    init_telegram_bot()
+    # Ініціалізуємо об'єкт Application
+    tg_application = init_telegram_bot()
+    app.state.tg_bot_app = tg_application
+
+    if tg_application:
+        print("Запуск Telegram-бота...")
+        # Запускаємо бота асинхронно як фонове завдання (Background Task)
+        # Це запобігає блокуванню головного циклу Uvicorn/FastAPI
+        asyncio.create_task(
+            tg_application.run_polling(
+                poll_interval=3.0,
+                drop_pending_updates=True,
+                stop_signals=()  # Важливо, щоб Uvicorn міг сам контролювати зупинку
+            )
+        )
+        print("Telegram-бот ініціалізовано.")
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    """Коректне завершення роботи бота при зупинці застосунку."""
+    if app.state.tg_bot_app:
+        print("Зупинка Telegram-бота...")
+        await app.state.tg_bot_app.shutdown()
 
 
 # 3. Базовий роут для перевірки працездатності
