@@ -42,7 +42,7 @@ def setup_telegram_bot(url_path: str):
 
     # 1. Запуск в асинхронному режимі (PTB)
     # Ми використовуємо tg_application.run_in_thread для роботи з PTB у синхронному циклі Flask
-    tg_application.run_in_thread()
+    #tg_application.run_in_thread()
 
     # 2. Встановлення Webhook URL (Потрібно вказати зовнішню URL!)
     # Цей крок не виконуємо в MVP, але він обов'язковий для продакшену
