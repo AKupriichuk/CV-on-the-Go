@@ -85,7 +85,6 @@ def telegram_webhook():
 def read_root():
     return jsonify({"status": "ok", "service": "CV on the Go (Webhook Mode) is running"})
 
-
 if __name__ == '__main__':
     # Запуск Gunicorn (для продакшен-середовища)
     # Ми запускаємо app.run() тільки для розробки.
