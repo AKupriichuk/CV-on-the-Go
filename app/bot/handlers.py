@@ -1,24 +1,23 @@
-from telegram import Update, ReplyKeyboardRemove, File
+from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 from app.core.database import get_db
 from app.logic import session_manager
+from app.pdf_generator.generator import generate_pdf_from_data
 from app.logic.session_manager import (
     STEP_START, STEP_WAITING_NAME, STEP_WAITING_CONTACTS,
     STEP_WAITING_SUMMARY, STEP_IDLE,
     transform_session_to_resume_data
 )
-from app.pdf_generator.generator import generate_pdf_from_data
 
 # ----------------------------------------------------------------------
-# КРОКИ ДІАЛОГУ ТА ФУНКЦІЇ ЗАПИТУ
+# КРОКИ ДІАЛОГУ ТА ФУНКЦІЇ ЗАПИТУ (Залишаються незмінними)
 # ----------------------------------------------------------------------
 
-# Зіставлення станів з наступним кроком та необхідним запитом
 DIALOG_STEPS = {
     STEP_START: {
         "prompt": "Привіт! Я бот для швидкого створення резюме. Введіть ваше повне ім'я (ПІБ):",
         "next_step": STEP_WAITING_NAME,
-        "context_key": None  # Початковий крок
+        "context_key": None
     },
     STEP_WAITING_NAME: {
         "prompt": "Чудово! Тепер введіть вашу електронну пошту та телефон (наприклад: email@example.com, 0991234567):",
@@ -28,7 +27,7 @@ DIALOG_STEPS = {
     STEP_WAITING_CONTACTS: {
         "prompt": "Дякую за контакти. Опишіть ваше професійне резюме (summary) одним абзацом:",
         "next_step": STEP_WAITING_SUMMARY,
-        "context_key": "contacts"  # Обробляється у message_handler
+        "context_key": "contacts"
     },
     STEP_WAITING_SUMMARY: {
         "prompt": "Дякую, основні дані зібрано! Натисніть /generate, щоб створити PDF-файл резюме, або почніть додавати досвід роботи /add_experience.",
@@ -54,12 +53,15 @@ def get_next_step(current_step):
 
 
 # ----------------------------------------------------------------------
-# ОСНОВНІ ОБРОБНИКИ КОМАНД
+# ОСНОВНІ ОБРОБНИКИ КОМАНД (СИНХРОННІ)
 # ----------------------------------------------------------------------
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обробляє команду /start. Створює або знаходить користувача та сесію."""
     user = update.effective_user
+    # Використовуємо ContextTypes.bot.send_message, оскільки update.message.reply_text не завжди коректно працює синхронно
+    bot = context.bot
+
     with get_db() as db:
         telegram_data = {
             "first_name": user.first_name,
@@ -76,48 +78,54 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             db, db_user.id, {}, next_step=next_step
         )
 
-    await update.message.reply_text(
-        f"Ласкаво просимо, {user.first_name}! {get_next_prompt(STEP_START)}"
+    bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=f"Ласкаво просимо, {user.first_name}! {get_next_prompt(STEP_START)}"
     )
 
 
-async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обробляє команду /generate. Запускає генерацію PDF."""
     user_id = update.effective_user.id
-    await update.message.reply_text("Починаю генерацію вашого резюме...")
+    bot = context.bot
+
+    bot.send_message(chat_id=update.effective_chat.id, text="Починаю генерацію вашого резюме...")
 
     with get_db() as db:
         db_user = session_manager.get_or_create_user(db, user_id, {})
         db_session = session_manager.get_session_by_user(db, db_user.id)
 
         if not db_session or db_session.current_step != STEP_IDLE:
-            await update.message.reply_text("Спочатку потрібно заповнити основні дані. Будь ласка, почніть з /start.")
+            bot.send_message(chat_id=update.effective_chat.id, text="Спочатку потрібно заповнити основні дані. Будь ласка, почніть з /start.")
             return
 
         try:
             # 1. Трансформація та валідація даних
             resume_data = transform_session_to_resume_data(db_session)
 
-            # 2. Генерація PDF-файлу
+            # 2. Генерація PDF-файлу (синхронна функція)
             pdf_bytes = generate_pdf_from_data(resume_data)
 
             # 3. Відправка файлу користувачу
-            await update.message.reply_document(
+            bot.send_document(
+                chat_id=update.effective_chat.id,
                 document=pdf_bytes,
                 filename=f"CV_{db_user.first_name}_{db_user.last_name}.pdf",
                 caption="Ваше резюме готове! Щоб оновити, використовуйте команди додавання.",
                 reply_markup=ReplyKeyboardRemove(),
             )
         except ValueError as e:
-            await update.message.reply_text(f"Помилка: Недостатньо даних для генерації. {e}")
-        except Exception:
-            await update.message.reply_text("Виникла внутрішня помилка при створенні PDF. Спробуйте пізніше.")
+            bot.send_message(chat_id=update.effective_chat.id, text=f"Помилка: Недостатньо даних для генерації. {e}")
+        except Exception as e:
+            print(f"Помилка генерації PDF: {e}")
+            bot.send_message(chat_id=update.effective_effective_chat.id, text="Виникла внутрішня помилка при створенні PDF. Спробуйте пізніше.")
 
 
-async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Головний обробник текстових повідомлень, що керує станом діалогу."""
     user_id = update.effective_user.id
     text = update.message.text
+    bot = context.bot
 
     with get_db() as db:
         db_user = session_manager.get_or_create_user(db, user_id, {})
@@ -125,12 +133,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         current_step = db_session.current_step
 
         if current_step not in DIALOG_STEPS or current_step == STEP_IDLE:
-            await update.message.reply_text(get_next_prompt(STEP_IDLE))
+            bot.send_message(chat_id=update.effective_chat.id, text=get_next_prompt(STEP_IDLE))
             return
 
         # Визначаємо ключ, під яким зберегти дані, та наступний крок
         dialog_info = DIALOG_STEPS[current_step]
-        context_key = dialog_info["context_key"]
         next_step = dialog_info["next_step"]
 
         new_context_data = {}
@@ -140,7 +147,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             new_context_data = {"personal": {"full_name": text}}
 
         elif current_step == STEP_WAITING_CONTACTS:
-            # Припускаємо, що контакти розділені комою
             parts = [p.strip() for p in text.split(',')]
             email = parts[0] if len(parts) > 0 else None
             phone = parts[1] if len(parts) > 1 else None
@@ -151,25 +157,17 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             new_context_data = {"personal": {"summary": text}}
 
         # 2. Оновлення сесії та перехід до наступного кроку
-
-        # Ми повинні об'єднати дані з контекстом, якщо це не перше збереження
-        # Проте, оскільки ми переходимо від кроку до кроку, просто оновлюємо
-        # контекст, використовуючи загальний метод.
         if new_context_data:
-            # Отримаємо поточний контекст
             current_context = db_session.context or {}
 
-            # Якщо ми на кроці, де потрібно оновити вкладений словник 'personal'
             if 'personal' in new_context_data:
-                # Оновлюємо вкладений 'personal'
                 personal_info = current_context.get('personal', {})
                 personal_info.update(new_context_data['personal'])
                 new_context_data = {'personal': personal_info}
 
-            # Оновлюємо сесію
             db_session = session_manager.update_session_context(
                 db, db_user.id, new_context_data, next_step=next_step
             )
 
         # 3. Відправка наступного повідомлення
-        await update.message.reply_text(get_next_prompt(next_step))
+        bot.send_message(chat_id=update.effective_chat.id, text=get_next_prompt(next_step))
