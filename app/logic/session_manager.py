@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session as DBSession
+from sqlalchemy.orm.attributes import flag_modified  # ВАЖЛИВО: для фіксації змін в JSON
 from app.models.orm import User, Session
 from app.models.schemas import ResumeData
 from datetime import datetime
-import json
+import copy
 
 # Константи кроків
 STEP_START = "START"
@@ -28,7 +29,7 @@ def get_or_create_user(db: DBSession, telegram_id: int, user_data: dict) -> User
         db.refresh(user)
 
         # Створюємо сесію для нового користувача
-        session = Session(user_id=user.id, current_step=STEP_START)
+        session = Session(user_id=user.id, current_step=STEP_START, context={})
         db.add(session)
         db.commit()
 
@@ -41,62 +42,65 @@ def get_session_by_user(db: DBSession, user_id: int) -> Session:
 
 
 def update_session_context(db: DBSession, user_id: int, new_data: dict, next_step: str = None) -> Session:
-    """Оновлює дані в контексті сесії та перемикає крок."""
+    """
+    Оновлює дані в контексті сесії та перемикає крок.
+    Використовує глибоке копіювання та flag_modified для надійності.
+    """
     session = get_session_by_user(db, user_id)
     if not session:
         return None
 
-    # Оновлення словника контексту
-    current_context = dict(session.context) if session.context else {}
+    # 1. Беремо поточний контекст (глибока копія, щоб не було проблем з посиланнями)
+    current_context = copy.deepcopy(session.context) if session.context else {}
 
-    # Глибоке злиття (merge) для словників (щоб не перезаписувати все personal)
+    # 2. Розумне об'єднання (Deep Merge) для словників (зокрема ключа 'personal')
     for key, value in new_data.items():
-        if isinstance(value, dict) and key in current_context:
+        if isinstance(value, dict) and key in current_context and isinstance(current_context[key], dict):
             current_context[key].update(value)
         else:
             current_context[key] = value
 
+    # 3. Записуємо оновлений контекст назад
     session.context = current_context
+
+    # 4. ВАЖЛИВО: Явно повідомляємо SQLAlchemy, що поле JSON змінилося
+    flag_modified(session, "context")
 
     if next_step:
         session.current_step = next_step
 
     session.updated_at = datetime.utcnow()
 
-    # Force update for SQLAlchemy JSON field detection
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    try:
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+    except Exception as e:
+        print(f"Помилка при збереженні сесії: {e}")
+        db.rollback()
+
     return session
 
 
 def transform_session_to_resume_data(session: Session) -> ResumeData:
     """
     Перетворює "сирі" дані з сесії в валідований об'єкт ResumeData.
-    Додає пусті списки для необов'язкових полів, щоб уникнути помилок.
     """
     context = session.context or {}
     personal = context.get("personal", {})
 
-    # Мінімальна валідація
-    if not personal.get("full_name"):
-        raise ValueError("Відсутнє повне ім'я")
-
-    # Формування словника для Pydantic
-    # ВАЖЛИВО: Ми додаємо пусті списки [], якщо даних немає
+    # Додаємо порожні значення, якщо їх немає, щоб уникнути помилок NoneType
     resume_dict = {
         "personal": {
-            "full_name": personal.get("full_name"),
-            "email": personal.get("email"),
-            "phone": personal.get("phone"),
-            "summary": personal.get("summary"),
+            "full_name": personal.get("full_name") or "",
+            "email": personal.get("email") or "",
+            "phone": personal.get("phone") or "",
+            "summary": personal.get("summary") or "",
             "telegram_username": personal.get("telegram_username"),
-            # Інші поля можуть бути None
             "linkedin": personal.get("linkedin"),
             "github": personal.get("github"),
             "website": personal.get("website")
         },
-        # ДОДАНО: Значення за замовчуванням для списків
         "experience": context.get("experience", []),
         "education": context.get("education", []),
         "skills": context.get("skills", []),
@@ -106,4 +110,6 @@ def transform_session_to_resume_data(session: Session) -> ResumeData:
     try:
         return ResumeData(**resume_dict)
     except Exception as e:
-        raise ValueError(f"Дані резюме неповні або некоректні: {e}")
+        # Для дебагу виведемо, що саме ми намагалися запхати в модель
+        print(f"DEBUG DATA: {resume_dict}")
+        raise ValueError(f"{e}")
