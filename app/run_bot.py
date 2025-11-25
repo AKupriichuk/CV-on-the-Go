@@ -3,7 +3,7 @@ import threading
 from dotenv import load_dotenv
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from app.core.database import init_db
-# ДОДАНО: імпорт add_experience_command
+# ОСЬ ТУТ БУЛА ПОМИЛКА - додаємо імпорт
 from app.bot.handlers import start_command, generate_command, message_handler, add_experience_command
 
 # Завантажуємо змінні середовища
@@ -16,7 +16,7 @@ def init_telegram_bot_handlers(application: Application):
     # Обробники PTB тут мають бути синхронними
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("generate", generate_command))
-    # ДОДАНО: реєстрація команди
+    # ОСЬ ЦЬОГО РЯДКА НЕ ВИСТАЧАЛО
     application.add_handler(CommandHandler("add_experience", add_experience_command))
 
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
@@ -45,5 +45,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # Ми запускаємо бота напряму (без Flask/Gunicorn)
     main()
