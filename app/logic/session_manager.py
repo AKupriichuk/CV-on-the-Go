@@ -12,18 +12,20 @@ STEP_WAITING_NAME = "WAITING_NAME"
 STEP_WAITING_CONTACTS = "WAITING_CONTACTS"
 STEP_WAITING_SUMMARY = "WAITING_SUMMARY"
 STEP_IDLE = "IDLE"
-STEP_WAITING_EXP_DESC = "WAITING_EXP_DESC"
 
-# --- НОВІ КРОКИ ДЛЯ ОСВІТИ ---
-STEP_WAITING_EDU_INSTITUTION = "WAITING_EDU_INSTITUTION"
-STEP_WAITING_EDU_DEGREE = "WAITING_EDU_DEGREE"
-STEP_WAITING_EDU_YEAR = "WAITING_EDU_YEAR"
-
-# Кроки для досвіду роботи
+# Досвід
 STEP_WAITING_EXP_COMPANY = "WAITING_EXP_COMPANY"
 STEP_WAITING_EXP_POSITION = "WAITING_EXP_POSITION"
 STEP_WAITING_EXP_PERIOD = "WAITING_EXP_PERIOD"
 STEP_WAITING_EXP_DESC = "WAITING_EXP_DESC"
+
+# Освіта
+STEP_WAITING_EDU_INSTITUTION = "WAITING_EDU_INSTITUTION"
+STEP_WAITING_EDU_DEGREE = "WAITING_EDU_DEGREE"
+STEP_WAITING_EDU_YEAR = "WAITING_EDU_YEAR"
+
+# Навички
+STEP_WAITING_SKILL = "WAITING_SKILL"
 
 
 def get_or_create_user(db: DBSession, telegram_id: int, user_data: dict) -> User:
@@ -49,16 +51,14 @@ def get_or_create_user(db: DBSession, telegram_id: int, user_data: dict) -> User
 
 
 def get_session_by_user(db: DBSession, user_id: int) -> Session:
-    """Повертає сесію за ВНУТРІШНІМ user_id (не Telegram ID)."""
+    """Повертає сесію за ВНУТРІШНІМ user_id."""
     return db.query(Session).filter(Session.user_id == user_id).first()
 
 
 def update_session_context(db: DBSession, user_id: int, new_data: dict, next_step: str = None) -> Session:
-    """Оновлює дані в контексті сесії та перемикає крок."""
-    # Тут user_id - це внутрішній ID, бо ми його отримуємо з get_or_create_user в handlers
+    """Оновлює дані в контексті сесії."""
     session = get_session_by_user(db, user_id)
-    if not session:
-        return None
+    if not session: return None
     
     current_context = copy.deepcopy(session.context) if session.context else {}
     
@@ -89,32 +89,18 @@ def update_session_context(db: DBSession, user_id: int, new_data: dict, next_ste
 
 
 def add_experience_item(db: DBSession, telegram_id: int) -> Session:
-    """
-    Переносить дані з 'temp_experience' у список 'experience'.
-    Приймає telegram_id, знаходить user.id і тоді шукає сесію.
-    """
-    print(f"--- STARTING add_experience_item for Telegram ID: {telegram_id} ---")
-    
-    # 1. Спочатку знайдемо користувача за Telegram ID
+    """Фіналізує та додає досвід роботи."""
+    print(f"--- ADD EXPERIENCE for TG ID: {telegram_id} ---")
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user:
-        print(f"ERROR: User with telegram_id {telegram_id} not found")
-        return None
-        
-    # 2. Тепер шукаємо сесію за внутрішнім ID користувача (user.id)
+    if not user: return None
     session = get_session_by_user(db, user.id)
-    
-    if not session:
-        print(f"ERROR: No session found for internal user_id {user.id}")
-        return None
+    if not session: return None
         
     context = copy.deepcopy(session.context) or {}
     temp_exp = context.get("temp_experience", {})
-    print(f"DEBUG: temp_experience content: {temp_exp}")
     
     if temp_exp:
         experience_list = context.get("experience", [])
-        
         new_job = {
             "company": temp_exp.get("company"),
             "job_title": temp_exp.get("position"),
@@ -122,79 +108,79 @@ def add_experience_item(db: DBSession, telegram_id: int) -> Session:
             "end_date": None,
             "description": [temp_exp.get("description")]
         }
-        
         experience_list.append(new_job)
         context["experience"] = experience_list
-        
-        # Очищаємо тимчасові дані
-        if "temp_experience" in context:
-            del context["temp_experience"]
+        if "temp_experience" in context: del context["temp_experience"]
             
         session.context = context
         flag_modified(session, "context")
         session.current_step = STEP_IDLE
-        
         db.add(session)
         db.commit()
-        print(f"SUCCESS: JOB ADDED TO DB: {new_job}")
-    else:
-        print(f"ERROR: TEMP_EXP IS EMPTY! NOTHING TO ADD.")
+        print(f"SUCCESS: JOB ADDED: {new_job}")
         
     return session
 
 
 def add_education_item(db: DBSession, telegram_id: int) -> Session:
-    """Зберігає дані про освіту з temp_education у список education."""
-    print(f"--- STARTING add_education_item for Telegram ID: {telegram_id} ---")
-
-    # 1. Знаходимо user
+    """Фіналізує та додає освіту."""
+    print(f"--- ADD EDUCATION for TG ID: {telegram_id} ---")
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user:
-        print(f"ERROR: User {telegram_id} not found")
-        return None
-
-    # 2. Знаходимо сесію
+    if not user: return None
     session = get_session_by_user(db, user.id)
-    if not session:
-        print(f"ERROR: Session not found for user {user.id}")
-        return None
-
+    if not session: return None
+        
     context = copy.deepcopy(session.context) or {}
     temp_edu = context.get("temp_education", {})
-    print(f"DEBUG: temp_education content: {temp_edu}")
-
+    
     if temp_edu:
         edu_list = context.get("education", [])
-
-        # Формуємо об'єкт (має відповідати EducationItem у schemas.py)
         new_edu = {
             "institution": temp_edu.get("institution"),
             "degree": temp_edu.get("degree"),
             "year_finished": temp_edu.get("year"),
-            "city": ""  # Місто поки не запитуємо, можна залишити пустим
+            "city": ""
         }
-
         edu_list.append(new_edu)
         context["education"] = edu_list
-
-        # Очищаємо темп
-        if "temp_education" in context:
-            del context["temp_education"]
-
+        if "temp_education" in context: del context["temp_education"]
+            
         session.context = context
         flag_modified(session, "context")
         session.current_step = STEP_IDLE
-
         db.add(session)
         db.commit()
         print(f"SUCCESS: EDUCATION ADDED: {new_edu}")
-    else:
-        print("ERROR: TEMP_EDUCATION IS EMPTY")
-
+    
     return session
 
+
+def add_skill_item(db: DBSession, telegram_id: int, skill_text: str) -> Session:
+    """Додає навичку (один рядок) у список."""
+    print(f"--- ADD SKILL for TG ID: {telegram_id} ---")
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user: return None
+    session = get_session_by_user(db, user.id)
+    if not session: return None
+        
+    context = copy.deepcopy(session.context) or {}
+    skills_list = context.get("skills", [])
+    
+    # Додаємо нову навичку
+    skills_list.append(skill_text)
+    context["skills"] = skills_list
+    
+    session.context = context
+    flag_modified(session, "context")
+    session.current_step = STEP_IDLE
+    
+    db.add(session)
+    db.commit()
+    print(f"SUCCESS: SKILL ADDED: {skill_text}")
+    return session
+
+
 def transform_session_to_resume_data(session: Session) -> ResumeData:
-    """Готує дані для генерації PDF."""
     context = session.context or {}
     personal = context.get("personal", {})
 
