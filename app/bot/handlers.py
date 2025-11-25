@@ -15,32 +15,37 @@ from app.logic.session_manager import (
 
 DIALOG_STEPS = {
     STEP_START: {
+        # Це повідомлення показується КОЛИ ми входимо в цей стан (але тут воно не використовується напряму, бо start_command має свій текст)
         "prompt": "Привіт! Я бот для швидкого створення резюме. Введіть ваше повне ім'я (ПІБ):",
         "next_step": STEP_WAITING_NAME,
         "context_key": None
     },
     STEP_WAITING_NAME: {
+        # Коли ми завершили введення Імені, ми переходимо до контактів.
+        # Тому prompt тут має запитувати КОНТАКТИ.
         "prompt": "Чудово! Тепер введіть вашу електронну пошту та телефон (наприклад: email@example.com, 0991234567):",
         "next_step": STEP_WAITING_CONTACTS,
         "context_key": "full_name"
     },
     STEP_WAITING_CONTACTS: {
+        # Коли ми ввели контакти, переходимо до Summary.
+        # Тому prompt тут запитує SUMMARY.
         "prompt": "Дякую за контакти. Опишіть ваше професійне резюме (summary) одним абзацом:",
         "next_step": STEP_WAITING_SUMMARY,
         "context_key": "contacts"
     },
     STEP_WAITING_SUMMARY: {
-        "prompt": "Дякую, основні дані зібрано! Натисніть /generate, щоб створити PDF-файл резюме, або почніть додавати досвід роботи /add_experience.",
+        # Коли ввели Summary, все готово.
+        "prompt": "Дякую, основні дані зібрано! Натисніть /generate, щоб створити PDF-файл резюме.",
         "next_step": STEP_IDLE,
         "context_key": "summary"
     },
     STEP_IDLE: {
-        "prompt": "Ви перебуваєте в режимі очікування команди. Використовуйте /generate або /add_experience.",
+        "prompt": "Ви перебуваєте в режимі очікування команди. Використовуйте /generate.",
         "next_step": STEP_IDLE,
         "context_key": None
     },
 }
-
 
 def get_next_prompt(current_step):
     """Повертає повідомлення для наступного кроку."""
