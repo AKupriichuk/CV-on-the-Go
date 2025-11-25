@@ -1,6 +1,6 @@
 from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
-from app.core.database import get_db
+from app.core.database import get_db  # Імпортуємо get_db
 from app.logic import session_manager
 from app.pdf_generator.generator import generate_pdf_from_data
 from app.logic.session_manager import (
@@ -10,7 +10,7 @@ from app.logic.session_manager import (
 )
 
 # ----------------------------------------------------------------------
-# КРОКИ ДІАЛОГУ ТА ФУНКЦІЇ ЗАПИТУ (Залишаються незмінними)
+# КРОКИ ДІАЛОГУ ТА ФУНКЦІЇ ЗАПИТУ
 # ----------------------------------------------------------------------
 
 DIALOG_STEPS = {
@@ -53,30 +53,31 @@ def get_next_step(current_step):
 
 
 # ----------------------------------------------------------------------
-# ОСНОВНІ ОБРОБНИКИ КОМАНД (СИНХРОННІ)
+# ОСНОВНІ ОБРОБНИКИ КОМАНД (СИНХРОННІ, З ЯВНИМ УПРАВЛІННЯМ СЕСІЄЮ)
 # ----------------------------------------------------------------------
 
 def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обробляє команду /start. Створює або знаходить користувача та сесію."""
     user = update.effective_user
-    # Використовуємо ContextTypes.bot.send_message, оскільки update.message.reply_text не завжди коректно працює синхронно
     bot = context.bot
 
-    with get_db() as db:
+    db = get_db()  # Явно відкриваємо сесію
+    try:
         telegram_data = {
             "first_name": user.first_name,
             "last_name": user.last_name,
             "username": user.username,
         }
-        # Створюємо або отримуємо користувача та його сесію
+        # Виклик функції логіки
         db_user = session_manager.get_or_create_user(db, user.id, telegram_data)
         db_session = session_manager.get_session_by_user(db, db_user.id)
 
-        # Переводимо сесію на перший крок діалогу
         next_step = STEP_WAITING_NAME
         db_session = session_manager.update_session_context(
             db, db_user.id, {}, next_step=next_step
         )
+    finally:
+        db.close()  # Явно закриваємо сесію
 
     bot.send_message(
         chat_id=update.effective_chat.id,
@@ -91,12 +92,14 @@ def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     bot.send_message(chat_id=update.effective_chat.id, text="Починаю генерацію вашого резюме...")
 
-    with get_db() as db:
+    db = get_db()  # Явно відкриваємо сесію
+    try:
         db_user = session_manager.get_or_create_user(db, user_id, {})
         db_session = session_manager.get_session_by_user(db, db_user.id)
 
         if not db_session or db_session.current_step != STEP_IDLE:
-            bot.send_message(chat_id=update.effective_chat.id, text="Спочатку потрібно заповнити основні дані. Будь ласка, почніть з /start.")
+            bot.send_message(chat_id=update.effective_chat.id,
+                             text="Спочатку потрібно заповнити основні дані. Будь ласка, почніть з /start.")
             return
 
         try:
@@ -118,7 +121,10 @@ def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             bot.send_message(chat_id=update.effective_chat.id, text=f"Помилка: Недостатньо даних для генерації. {e}")
         except Exception as e:
             print(f"Помилка генерації PDF: {e}")
-            bot.send_message(chat_id=update.effective_effective_chat.id, text="Виникла внутрішня помилка при створенні PDF. Спробуйте пізніше.")
+            bot.send_message(chat_id=update.effective_chat.id,
+                             text="Виникла внутрішня помилка при створенні PDF. Спробуйте пізніше.")
+    finally:
+        db.close()  # Явно закриваємо сесію
 
 
 def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -127,7 +133,8 @@ def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text
     bot = context.bot
 
-    with get_db() as db:
+    db = get_db()  # Явно відкриваємо сесію
+    try:
         db_user = session_manager.get_or_create_user(db, user_id, {})
         db_session = session_manager.get_session_by_user(db, db_user.id)
         current_step = db_session.current_step
@@ -136,7 +143,6 @@ def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             bot.send_message(chat_id=update.effective_chat.id, text=get_next_prompt(STEP_IDLE))
             return
 
-        # Визначаємо ключ, під яким зберегти дані, та наступний крок
         dialog_info = DIALOG_STEPS[current_step]
         next_step = dialog_info["next_step"]
 
@@ -171,3 +177,5 @@ def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         # 3. Відправка наступного повідомлення
         bot.send_message(chat_id=update.effective_chat.id, text=get_next_prompt(next_step))
+    finally:
+        db.close()  # Явно закриваємо сесію
