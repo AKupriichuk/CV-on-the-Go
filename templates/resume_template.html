@@ -1,96 +1,190 @@
 <!DOCTYPE html>
-<html>
+<html lang="uk">
 <head>
     <meta charset="UTF-8">
     <title>{{ data.personal.full_name }} - Resume</title>
     <style>
         body {
-            font-family: 'Times New Roman', Times, serif;
-            line-height: 1.5;
-            padding: 20px;
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+            line-height: 1.6;
+            padding: 40px;
             max-width: 800px;
             margin: 0 auto;
         }
-        h1, h2 {
-            color: #333;
-            border-bottom: 2px solid #ccc;
-            padding-bottom: 5px;
-            margin-top: 20px;
+        
+        /* Заголовок (Ім'я) */
+        h1 {
+            color: #2c3e50;
+            text-transform: uppercase;
+            font-size: 28px;
+            margin-bottom: 5px;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
         }
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .header h1 {
-            border-bottom: none;
-            margin: 0;
-            font-size: 2em;
-        }
+
+        /* Контактна інформація */
         .contact-info {
-            text-align: center;
-            font-size: 0.9em;
+            font-size: 14px;
+            margin-bottom: 30px;
             color: #555;
-            margin-top: 5px;
         }
-        .section-item {
+        .contact-info span {
+            margin-right: 15px;
+        }
+        .contact-info a {
+            color: #3498db;
+            text-decoration: none;
+        }
+
+        /* Заголовки секцій */
+        h2 {
+            background-color: #f2f2f2;
+            padding: 8px 15px;
+            font-size: 18px;
+            border-left: 5px solid #3498db;
+            margin-top: 25px;
             margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        /* Елементи списків (робота, освіта) */
+        .item {
+            margin-bottom: 20px;
+        }
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 5px;
         }
         .job-title {
             font-weight: bold;
-            display: inline-block;
-            margin-right: 10px;
+            font-size: 16px;
+            color: #2c3e50;
         }
         .company {
             font-style: italic;
+            color: #555;
         }
         .date {
-            float: right;
-            font-size: 0.9em;
+            font-weight: bold;
+            color: #3498db;
+            font-size: 14px;
+            white-space: nowrap; /* Щоб дата не розривалася */
         }
+        
+        /* Списки опису */
         ul {
-            list-style-type: disc;
-            margin-left: 20px;
-            padding-left: 0;
+            margin-top: 5px;
+            margin-bottom: 10px;
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        /* Секція навичок */
+        .skills-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .skill-tag {
+            background-color: #e1ecf4;
+            color: #2c5e77;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            border: 1px solid #cce1f0;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>{{ data.personal.full_name }}</h1>
-        <div class="contact-info">
-            {{ data.personal.email }} | {{ data.personal.phone }} |
-            {{ data.personal.telegram_username }}
-        </div>
+
+    <h1>{{ data.personal.full_name }}</h1>
+
+    <div class="contact-info">
+        {% if data.personal.email %}
+            <span>📧 {{ data.personal.email }}</span>
+        {% endif %}
+        
+        {% if data.personal.phone %}
+            <span>📱 {{ data.personal.phone }}</span>
+        {% endif %}
+
+        {% if data.personal.telegram_username %}
+            <span>✈️ {{ data.personal.telegram_username }}</span>
+        {% endif %}
+        
+        {% if data.personal.linkedin %}
+            <span>🔗 LinkedIn</span>
+        {% endif %}
     </div>
 
     {% if data.personal.summary %}
-    <h2>Про себе</h2>
-    <p>{{ data.personal.summary }}</p>
+    <div class="section">
+        <h2>Про мене</h2>
+        <p>{{ data.personal.summary }}</p>
+    </div>
     {% endif %}
 
     {% if data.experience %}
-    <h2>Досвід роботи</h2>
-    {% for job in data.experience %}
-    <div class="section-item">
-        <span class="job-title">{{ job.job_title }}</span> | <span class="company">{{ job.company }}</span>
-        <span class="date">{{ job.start_date.strftime('%Y.%m') }} – {% if job.end_date %}{{ job.end_date.strftime('%Y.%m') }}{% else %}Наш час{% endif %}</span>
-        <ul>
-            {% for desc in job.description %}
-            <li>{{ desc }}</li>
-            {% endfor %}
-        </ul>
+    <div class="section">
+        <h2>Досвід роботи</h2>
+        {% for job in data.experience %}
+        <div class="item">
+            <div class="item-header">
+                <div>
+                    <span class="job-title">{{ job.job_title }}</span>
+                    <span class="company"> — {{ job.company }}</span>
+                </div>
+                <div class="date">
+                    {{ job.start_date }} 
+                    {% if job.end_date %} — {{ job.end_date }}{% endif %}
+                </div>
+            </div>
+            
+            {% if job.description %}
+            <ul>
+                {% for desc_item in job.description %}
+                <li>{{ desc_item }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% endfor %}
     </div>
-    {% endfor %}
     {% endif %}
 
     {% if data.education %}
-    <h2>Освіта</h2>
-    {% for edu in data.education %}
-    <div class="section-item">
-        <span class="job-title">{{ edu.degree }}</span> | <span class="company">{{ edu.institution }}, {{ edu.city }}</span>
-        <span class="date">{{ edu.year_finished }}</span>
+    <div class="section">
+        <h2>Освіта</h2>
+        {% for edu in data.education %}
+        <div class="item">
+            <div class="item-header">
+                <div>
+                    <span class="job-title">{{ edu.degree }}</span>
+                    <span class="company"> — {{ edu.institution }}</span>
+                    {% if edu.city %}, {{ edu.city }}{% endif %}
+                </div>
+                <div class="date">{{ edu.year_finished }}</div>
+            </div>
+        </div>
+        {% endfor %}
     </div>
-    {% endfor %}
+    {% endif %}
+
+    {% if data.skills %}
+    <div class="section">
+        <h2>Навички</h2>
+        <div class="skills-list">
+            {% for skill in data.skills %}
+            <span class="skill-tag">{{ skill }}</span>
+            {% endfor %}
+        </div>
+    </div>
     {% endif %}
 
 </body>

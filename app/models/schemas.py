@@ -1,54 +1,47 @@
-from datetime import date
 from typing import List, Optional
-from pydantic import BaseModel, Field, EmailStr, HttpUrl
+from pydantic import BaseModel, Field
 
-
-# --- Схеми для Складових Частин Резюме (використовуються в ResumeData) ---
+# --- Схеми для Складових Частин Резюме ---
 
 class PersonalInfo(BaseModel):
     """Схема для особистої інформації користувача."""
+    # Змінив EmailStr на str, щоб уникнути помилок, якщо користувач введе пробіл випадково
     full_name: str = Field(..., min_length=2, description="Повне ім'я та прізвище")
-    email: EmailStr = Field(..., description="Контактна електронна пошта")
-    phone: str = Field(..., description="Контактний телефон")
-    linkedin_url: Optional[HttpUrl] = Field(None, description="Посилання на профіль LinkedIn")
-    github_url: Optional[HttpUrl] = Field(None, description="Посилання на GitHub")
-    summary: str = Field(..., description="Коротке резюме/огляд професійних цілей")
+    email: Optional[str] = Field(None, description="Контактна електронна пошта")
+    phone: Optional[str] = Field(None, description="Контактний телефон")
+    # Змінив HttpUrl на str, бо користувачі часто лінуються писати https://
+    linkedin: Optional[str] = Field(None, description="Посилання на профіль LinkedIn")
+    github: Optional[str] = Field(None, description="Посилання на GitHub")
+    website: Optional[str] = Field(None, description="Вебсайт")
+    telegram_username: Optional[str] = Field(None, description="Telegram")
+    summary: Optional[str] = Field(None, description="Коротке резюме")
 
 
-class Experience(BaseModel):
+class ExperienceItem(BaseModel):
     """Схема для одного запису досвіду роботи."""
     job_title: str = Field(..., description="Назва посади")
     company: str = Field(..., description="Назва компанії")
-    start_date: date = Field(..., description="Дата початку роботи (формат YYYY-MM-DD)")
-    end_date: Optional[date] = Field(None, description="Дата завершення роботи. Null, якщо працює зараз.")
-    description: List[str] = Field(..., description="Список ключових досягнень або обов'язків")
+    # ВАЖЛИВО: Змінив date на str, щоб приймати текст "Вересень 2021"
+    start_date: str = Field(..., description="Дата початку роботи")
+    end_date: Optional[str] = Field(None, description="Дата завершення роботи")
+    description: List[str] = Field(..., description="Список обов'язків")
 
 
-class Education(BaseModel):
+class EducationItem(BaseModel):
     """Схема для одного запису про освіту."""
-    degree: str = Field(..., description="Отриманий ступінь (наприклад, Магістр, Бакалавр)")
-    institution: str = Field(..., description="Назва навчального закладу")
-    city: str = Field(..., description="Місто")
-    year_finished: int = Field(..., ge=1900, description="Рік завершення навчання")
-
-
-class SkillGroup(BaseModel):
-    """Схема для групи навичок (наприклад, 'Мови програмування')."""
-    group_name: str = Field(..., description="Назва групи навичок (наприклад, 'Frontend', 'Databases')")
-    skills: List[str] = Field(..., description="Список навичок у групі")
+    degree: str = Field(..., description="Ступінь")
+    institution: str = Field(..., description="Навчальний заклад")
+    city: Optional[str] = Field(None, description="Місто")
+    year_finished: str = Field(..., description="Рік завершення")
 
 
 # --- Головна Схема Даних Резюме ---
 
 class ResumeData(BaseModel):
     """Головна структура, що містить усі дані для генерації PDF."""
-
-    # Використовуємо вкладені схеми, визначені вище
     personal: PersonalInfo
-    experience: List[Experience] = Field(default_factory=list)
-    education: List[Education] = Field(default_factory=list)
-    skills: List[SkillGroup] = Field(default_factory=list)
-
-    # Додаткові дані, які можуть знадобитися для шаблону
-    template_name: str = "cv_basic"
-    language: str = "uk"
+    experience: List[ExperienceItem] = Field(default_factory=list)
+    education: List[EducationItem] = Field(default_factory=list)
+    # Поки що зробимо skills простим списком рядків, бо ми ще не робили групування
+    skills: List[str] = Field(default_factory=list)
+    projects: List[dict] = Field(default_factory=list)
