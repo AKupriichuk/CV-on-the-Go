@@ -13,8 +13,12 @@ class User(Base):
     """Таблиця users: зберігає дані користувачів Telegram."""
     __tablename__ = "users"
 
-    id = Column(BigInteger, primary_key=True, index=True)  # ID користувача Telegram
-    telegram_id = Column(BigInteger, unique=True, nullable=False)  # Дублювання для зручності
+    # ВИПРАВЛЕННЯ 1: Integer для Primary Key (щоб працював autoincrement в SQLite)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+
+    # telegram_id залишаємо BigInteger, це правильно!
+    telegram_id = Column(BigInteger, unique=True, nullable=False)
+
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
     username = Column(String, nullable=True)
@@ -31,9 +35,12 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
-    current_step = Column(String, default="START")  # Поточний крок діалогу (START, WAITING_FOR_NAME, etc.)
-    context = Column(JSON, default={})  # Зберігає проміжні введені дані у форматі JSON
+
+    # ВИПРАВЛЕННЯ 2: Змінили на Integer, щоб співпадало з users.id
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    current_step = Column(String, default="START")
+    context = Column(JSON, default={})
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Зв'язки
@@ -63,7 +70,9 @@ class Resume(Base):
     __tablename__ = "resumes"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+
+    # ВИПРАВЛЕННЯ 3: Змінили на Integer, щоб співпадало з users.id
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=False)
 
     title = Column(String, default="Мій Профіль")
