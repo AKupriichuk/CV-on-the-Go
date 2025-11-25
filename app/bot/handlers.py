@@ -19,34 +19,32 @@ from app.logic.session_manager import (
 
 DIALOG_STEPS = {
     STEP_START: {
-        # Коли ми тільки починаємо, наступний крок - чекати ім'я.
         "prompt": "Привіт! Я бот для створення резюме. Введіть ваше повне ім'я (ПІБ):",
         "next_step": STEP_WAITING_NAME,
         "context_key": None
     },
     STEP_WAITING_NAME: {
-        # Ми зараз чекаємо ім'я. Наступним кроком будемо чекати контакти.
-        # Тому prompt тут має запитувати контакти.
-        "prompt": "Чудово! Тепер введіть вашу електронну пошту та телефон (наприклад: email@example.com, 0991234567):",
+        # Цей текст ми бачимо, якщо раптом потрапимо сюди повторно,
+        # але зазвичай після START ми одразу йдемо далі.
+        "prompt": "Введіть ваше повне ім'я (ПІБ):",
         "next_step": STEP_WAITING_CONTACTS,
         "context_key": "full_name"
     },
     STEP_WAITING_CONTACTS: {
-        # Ми зараз чекаємо контакти. Наступним кроком чекаємо Summary.
-        # Тому prompt тут має запитувати Summary.
-        "prompt": "Дякую за контакти. Опишіть ваше професійне резюме (summary) одним абзацом:",
+        # ВИПРАВЛЕНО: Тут ми ЗАПИТУЄМО контакти
+        "prompt": "Чудово! Тепер введіть вашу електронну пошту та телефон (наприклад: email@example.com, 0991234567):",
         "next_step": STEP_WAITING_SUMMARY,
         "context_key": "contacts"
     },
     STEP_WAITING_SUMMARY: {
-        # Ми зараз чекаємо Summary. Наступний крок - кінець (IDLE).
-        # Prompt повідомляє, що все готово.
-        "prompt": "Дякую, основні дані зібрано! Натисніть /generate, щоб створити PDF-файл резюме.",
+        # ВИПРАВЛЕНО: Тут ми ЗАПИТУЄМО Summary
+        "prompt": "Дякую за контакти. Опишіть ваше професійне резюме (summary) одним абзацом:",
         "next_step": STEP_IDLE,
         "context_key": "summary"
     },
     STEP_IDLE: {
-        "prompt": "Ви перебуваєте в режимі очікування команди. Використовуйте /generate.",
+        # Це фініш
+        "prompt": "Дякую, основні дані зібрано! Натисніть /generate, щоб створити PDF-файл резюме.",
         "next_step": STEP_IDLE,
         "context_key": None
     },
