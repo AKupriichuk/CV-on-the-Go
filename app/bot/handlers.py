@@ -13,10 +13,6 @@ from app.logic.session_manager import (
 # КРОКИ ДІАЛОГУ ТА ФУНКЦІЇ ЗАПИТУ
 # ----------------------------------------------------------------------
 
-# ----------------------------------------------------------------------
-# ВИПРАВЛЕНИЙ СЛОВНИК КРОКІВ
-# ----------------------------------------------------------------------
-
 DIALOG_STEPS = {
     STEP_START: {
         "prompt": "Привіт! Я бот для створення резюме. Введіть ваше повне ім'я (ПІБ):",
@@ -24,26 +20,21 @@ DIALOG_STEPS = {
         "context_key": None
     },
     STEP_WAITING_NAME: {
-        # Цей текст ми бачимо, якщо раптом потрапимо сюди повторно,
-        # але зазвичай після START ми одразу йдемо далі.
         "prompt": "Введіть ваше повне ім'я (ПІБ):",
         "next_step": STEP_WAITING_CONTACTS,
         "context_key": "full_name"
     },
     STEP_WAITING_CONTACTS: {
-        # ВИПРАВЛЕНО: Тут ми ЗАПИТУЄМО контакти
         "prompt": "Чудово! Тепер введіть вашу електронну пошту та телефон (наприклад: email@example.com, 0991234567):",
         "next_step": STEP_WAITING_SUMMARY,
         "context_key": "contacts"
     },
     STEP_WAITING_SUMMARY: {
-        # ВИПРАВЛЕНО: Тут ми ЗАПИТУЄМО Summary
         "prompt": "Дякую за контакти. Опишіть ваше професійне резюме (summary) одним абзацом:",
         "next_step": STEP_IDLE,
         "context_key": "summary"
     },
     STEP_IDLE: {
-        # Це фініш
         "prompt": "Дякую, основні дані зібрано! Натисніть /generate, щоб створити PDF-файл резюме.",
         "next_step": STEP_IDLE,
         "context_key": None
@@ -59,13 +50,11 @@ def get_next_prompt(current_step):
 # ОСНОВНІ ОБРОБНИКИ КОМАНД (АСИНХРОННІ)
 # ----------------------------------------------------------------------
 
-# ЗМІНА 1: Додано async
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обробляє команду /start. Створює або знаходить користувача та сесію."""
     user = update.effective_user
     bot = context.bot
 
-    # Робота з БД залишається синхронною (блокуючою), але це допустимо для прототипу
     db = get_db()
     try:
         telegram_data = {
@@ -76,27 +65,23 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         db_user = session_manager.get_or_create_user(db, user.id, telegram_data)
 
         next_step = STEP_WAITING_NAME
-        # Оновлюємо сесію
         session_manager.update_session_context(
             db, db_user.id, {}, next_step=next_step
         )
     finally:
         db.close()
 
-    # ЗМІНА 2: Додано await
     await bot.send_message(
         chat_id=update.effective_chat.id,
         text=f"Ласкаво просимо, {user.first_name}! {get_next_prompt(STEP_START)}"
     )
 
 
-# ЗМІНА 1: Додано async
 async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обробляє команду /generate. Запускає генерацію PDF."""
     user_id = update.effective_user.id
     bot = context.bot
 
-    # ЗМІНА 2: Додано await
     await bot.send_message(chat_id=update.effective_chat.id, text="Починаю генерацію вашого резюме...")
 
     db = get_db()
@@ -116,7 +101,7 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             # 2. Генерація PDF-файлу
             pdf_bytes = generate_pdf_from_data(resume_data)
 
-            # 3. Відправка файлу користувачу (ЗМІНА 2: Додано await)
+            # 3. Відправка файлу користувачу
             await bot.send_document(
                 chat_id=update.effective_chat.id,
                 document=pdf_bytes,
@@ -135,7 +120,6 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         db.close()
 
 
-# ЗМІНА 1: Додано async
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Головний обробник текстових повідомлень, що керує станом діалогу."""
     user_id = update.effective_user.id
@@ -165,28 +149,21 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             parts = [p.strip() for p in text.split(',')]
             email = parts[0] if len(parts) > 0 else None
             phone = parts[1] if len(parts) > 1 else None
-            # Зберігаємо також username, якщо він є
             username = db_user.username or ""
-
             new_context_data = {"personal": {"email": email, "phone": phone, "telegram_username": username}}
 
         elif current_step == STEP_WAITING_SUMMARY:
             new_context_data = {"personal": {"summary": text}}
 
-        # 2. Оновлення сесії та перехід до наступного кроку
+        # 2. Оновлення сесії
+        # ВИПРАВЛЕНО: Ми більше не намагаємося "злити" дані вручну тут.
+        # Ми просто передаємо нові дані в session_manager, який зробить це правильно.
         if new_context_data:
-            current_context = db_session.context or {}
-
-            if 'personal' in new_context_data:
-                personal_info = current_context.get('personal', {})
-                personal_info.update(new_context_data['personal'])
-                new_context_data = {'personal': personal_info}
-
             session_manager.update_session_context(
                 db, db_user.id, new_context_data, next_step=next_step
             )
 
-        # 3. Відправка наступного повідомлення (ЗМІНА 2: Додано await)
+        # 3. Відправка наступного повідомлення
         await bot.send_message(chat_id=update.effective_chat.id, text=get_next_prompt(next_step))
     finally:
         db.close()
