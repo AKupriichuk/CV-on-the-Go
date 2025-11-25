@@ -12,6 +12,12 @@ STEP_WAITING_NAME = "WAITING_NAME"
 STEP_WAITING_CONTACTS = "WAITING_CONTACTS"
 STEP_WAITING_SUMMARY = "WAITING_SUMMARY"
 STEP_IDLE = "IDLE"
+STEP_WAITING_EXP_DESC = "WAITING_EXP_DESC"
+
+# --- НОВІ КРОКИ ДЛЯ ОСВІТИ ---
+STEP_WAITING_EDU_INSTITUTION = "WAITING_EDU_INSTITUTION"
+STEP_WAITING_EDU_DEGREE = "WAITING_EDU_DEGREE"
+STEP_WAITING_EDU_YEAR = "WAITING_EDU_YEAR"
 
 # Кроки для досвіду роботи
 STEP_WAITING_EXP_COMPANY = "WAITING_EXP_COMPANY"
@@ -136,6 +142,56 @@ def add_experience_item(db: DBSession, telegram_id: int) -> Session:
         
     return session
 
+
+def add_education_item(db: DBSession, telegram_id: int) -> Session:
+    """Зберігає дані про освіту з temp_education у список education."""
+    print(f"--- STARTING add_education_item for Telegram ID: {telegram_id} ---")
+
+    # 1. Знаходимо user
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        print(f"ERROR: User {telegram_id} not found")
+        return None
+
+    # 2. Знаходимо сесію
+    session = get_session_by_user(db, user.id)
+    if not session:
+        print(f"ERROR: Session not found for user {user.id}")
+        return None
+
+    context = copy.deepcopy(session.context) or {}
+    temp_edu = context.get("temp_education", {})
+    print(f"DEBUG: temp_education content: {temp_edu}")
+
+    if temp_edu:
+        edu_list = context.get("education", [])
+
+        # Формуємо об'єкт (має відповідати EducationItem у schemas.py)
+        new_edu = {
+            "institution": temp_edu.get("institution"),
+            "degree": temp_edu.get("degree"),
+            "year_finished": temp_edu.get("year"),
+            "city": ""  # Місто поки не запитуємо, можна залишити пустим
+        }
+
+        edu_list.append(new_edu)
+        context["education"] = edu_list
+
+        # Очищаємо темп
+        if "temp_education" in context:
+            del context["temp_education"]
+
+        session.context = context
+        flag_modified(session, "context")
+        session.current_step = STEP_IDLE
+
+        db.add(session)
+        db.commit()
+        print(f"SUCCESS: EDUCATION ADDED: {new_edu}")
+    else:
+        print("ERROR: TEMP_EDUCATION IS EMPTY")
+
+    return session
 
 def transform_session_to_resume_data(session: Session) -> ResumeData:
     """Готує дані для генерації PDF."""
